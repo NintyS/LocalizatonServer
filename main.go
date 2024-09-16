@@ -3,64 +3,54 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
-	"strconv"
+	"time"
 )
 
-type Users struct {
-	Name      string  `json:"name"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
-	When      string  `json:"time"`
+type User struct {
+	Address   string
+	Latitude  float64
+	Longitude float64
+	//Time      time.Time
 }
 
-var _users []Users
+var Addresses []User
 
-func getLocalization(w http.ResponseWriter, req *http.Request) {
+func recPos(w http.ResponseWriter, req *http.Request) {
 
-	fmt.Println(_users)
+	body, _ := io.ReadAll(req.Body)
 
-	marshal, err := json.Marshal(_users)
-	if err != nil {
-		fmt.Println(err)
-		fmt.Fprint(w, err.Error())
-		return
+	fmt.Println("Body:", string(body))
+
+	for _, v := range Addresses {
+		if v.Address == req.RemoteAddr {
+			fmt.Printf("Urządzenie: %s wysłało swoją pozycję: lat: %f, lon: %f o: %s\n", req.RemoteAddr, v.Latitude, v.Longitude, time.Now().Format(time.TimeOnly))
+			return
+		}
 	}
 
-	fmt.Println("JSON:", string(marshal))
-	fmt.Fprintf(w, string(marshal))
+	var user User
+
+	err := json.Unmarshal(body, &user)
+	if err != nil {
+		fmt.Println("Err:", err)
+	}
+
+	user.Address = req.RemoteAddr
+
+	fmt.Printf("Urządzenie: %s wysłało swoją pozycję: lat: %f, lon: %f o: %s\n", user.Address, user.Latitude, user.Longitude, time.Now().Format(time.TimeOnly))
+
+	Addresses = append(Addresses, user)
 }
 
-func setLocalization(w http.ResponseWriter, req *http.Request) {
-	err := req.ParseForm()
-	if err != nil {
-		fmt.Println(err)
-		fmt.Fprint(w, err.Error())
-		return
-	}
-	for key, value := range req.Form {
-		fmt.Println(key, value)
-	}
-
-	var u Users
-
-	u.Name = req.Form.Get("name")
-	var latitude = req.Form.Get("latitude")
-	u.Latitude, _ = strconv.ParseFloat(latitude, 64)
-	var longitude = req.Form.Get("longitude")
-	u.Longitude, _ = strconv.ParseFloat(longitude, 64)
-	u.when = req.Form.Get("time") //client gives server his local time
-
-	fmt.Println("Stworzony użytkownik:", u)
-
-	_users = append(_users, u)
+func RegDev(w http.ResponseWriter, req *http.Request) {
 
 }
 
 func main() {
 
-	http.HandleFunc("/getLocalization", getLocalization)
-	http.HandleFunc("/setLocalization", setLocalization)
+	http.HandleFunc("/receivePosition", recPos)
 
-	http.ListenAndServe(":8090", nil)
+	fmt.Println("Error:", http.ListenAndServe(":80", nil))
 }
